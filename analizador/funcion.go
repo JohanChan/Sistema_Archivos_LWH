@@ -17,6 +17,11 @@ import (
 var size, path, name, unit string
 var tipo, fit, eliminar, agregar string
 var mbr Mbr
+var arrayLinea []string
+var listadoMount []ParticionMontada
+var abecedario = []string{"a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m", "n", "o", "p", "q", "r", "s", "t", "u", "v", "w", "x", "y", "z"}
+var incremento int
+var id []string
 
 const (
 	Informacion = "\033[1;34m"
@@ -26,8 +31,6 @@ const (
 	DebugColor  = "\033[0;36m"
 	last        = "\033[0m"
 )
-
-var arrayLinea []string
 
 type Mbr struct {
 	Mbr_tamano         int64     //8 bytes
@@ -47,6 +50,12 @@ type Partition struct {
 	Part_size   int64    // 8 bytes
 	Part_name   [16]byte // 16 bytes
 }
+type ParticionMontada struct {
+	Path  string
+	Name  string
+	IDn   string
+	Letra string
+}
 
 func AsignarArray(arraInicio []string) {
 	arrayLinea = arraInicio
@@ -63,9 +72,93 @@ func FuncionComando(arreglo []string) {
 		} else if strings.EqualFold(arreglo[i], "fdisk") {
 			AtributoFDISK(arreglo[i+1], i+1)
 		} else if strings.EqualFold(arreglo[i], "mount") {
+			AtributosMount(arreglo[i+1], i+1)
 		} else if strings.EqualFold(arreglo[i], "unmount") {
+			AtributosUnmount(arreglo[i+1], i+1)
 		}
 	}
+}
+func AtributosUnmount(atributo string, indice int) {
+	if strings.EqualFold(atributo, "-idn") {
+		id = append(id, EliminarBarra(arrayLinea[indice+1]))
+		indice += 2
+		AtributosUnmount(arrayLinea[indice], indice)
+	} else {
+		DesmontarParticion(id)
+	}
+}
+func DesmontarParticion(id []string) {
+	for i := 0; i < len(listadoMount); i++ {
+		for j := 0; j < len(id); j++ {
+			if listadoMount[i].IDn == id[j] {
+				listadoMount = Desmontar(listadoMount, i)
+			}
+		}
+
+	}
+}
+func Desmontar(s []ParticionMontada, index int) []ParticionMontada {
+	s[index] = s[len(s)-1]
+	return s[:len(s)-1]
+}
+
+func AtributosMount(atributo string, indice int) {
+	if strings.EqualFold(atributo, "-name") {
+		name = EliminarBarra(arrayLinea[indice+1])
+		indice += 2
+		AtributosMount(arrayLinea[indice], indice)
+	} else if strings.EqualFold(atributo, "-path") {
+		path = EliminarBarra(arrayLinea[indice+1])
+		indice += 2
+		AtributosMount(arrayLinea[indice], indice)
+	} else {
+		if name == "" && path == "" {
+			ImprimirMontadas(listadoMount)
+		} else {
+			mbr = LeerMBR(path)
+			MontarParticion(path, name)
+			path = ""
+			name = ""
+		}
+
+	}
+}
+
+func MontarParticion(path string, name string) {
+	var arrnombre [16]byte
+	copy(arrnombre[:], name)
+	nombreE := string(arrnombre[:])
+	if string(mbr.Mbr_partition_1.Part_name[:]) != nombreE && string(mbr.Mbr_partition_2.Part_name[:]) != nombreE && string(mbr.Mbr_partition_3.Part_name[:]) != nombreE && string(mbr.Mbr_partition_4.Part_name[:]) != nombreE {
+		fmt.Println("Particion no existe en disco, pruebe nuevamente")
+	} else {
+		montar := ParticionMontada{}
+		l := AsignarLiteral(path)
+		incremento = AsignarNumero(&incremento)
+		montar.Letra = l
+		montar.Name = name
+		montar.Path = path
+		montar.IDn = "vd" + l + strconv.Itoa(incremento)
+		listadoMount = append(listadoMount, montar)
+	}
+}
+func ImprimirMontadas(lista []ParticionMontada) {
+	for i := 0; i < len(lista); i++ {
+		fmt.Println("-path->"+lista[i].Path+" -name->"+lista[i].Name, " -id->"+lista[i].IDn)
+	}
+}
+func AsignarNumero(incremento *int) int {
+	return *incremento + 1
+
+}
+func AsignarLiteral(path string) string {
+	longitud := len(abecedario)
+	for i := 0; i < len(listadoMount); i++ {
+		if path == listadoMount[i].Path {
+			return listadoMount[i].Letra
+		}
+	}
+	random := rand.Intn(longitud)
+	return abecedario[random]
 }
 func AtributosMKDISK(atrributo string, indice int) {
 	if strings.EqualFold(atrributo, "-size") {
@@ -506,7 +599,7 @@ func LeerMBR(path string) Mbr {
 	archivo, err := os.OpenFile(path, os.O_RDWR, 0755)
 	defer archivo.Close()
 	if err != nil {
-		panic(err)
+		fmt.Println("Ruta incorrecta")
 	}
 	mbr := Mbr{}
 	tam := int(unsafe.Sizeof(mbr))
