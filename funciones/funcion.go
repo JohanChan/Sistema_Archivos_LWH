@@ -469,7 +469,7 @@ func CrearGrupo(idp string, nombre string) {
 		mbr = LeerMBR(pPart)
 		par := ObtenerParticion(nPart, mbr)
 		sb = LeerSb(pPart, par.Part_start)
-		a := LeerBitmap(pPart, sb.Sb_ap_bitmap_bloques, sb.Sb_bloques_count)
+		//a := LeerBitmap(pPart, sb.Sb_ap_bitmap_bloques, sb.Sb_bloques_count)
 		bInodo := LeerBitmap(pPart, sb.Sb_ap_bitmap_tabla_inodo, sb.Sb_inodos_count)
 		avd = LeerAvd(pPart, sb.Sb_ap_arbol_directorio)
 		dd = LeerDD(pPart, sb.Sb_ap_detalle_directorio)
@@ -477,7 +477,7 @@ func CrearGrupo(idp string, nombre string) {
 		var bloqueActual, iActual int64
 		var cadena string = ""
 		var tot, totalInodos int
-		nBit := CantidadBitOcupados(a)
+		//nBit := CantidadBitOcupados(a)
 		for in := 0; in < len(i.I_array_bloques); in++ {
 			if i.I_array_bloques[in] != 0 {
 				tot++
@@ -519,7 +519,6 @@ func CrearGrupo(idp string, nombre string) {
 			}
 			for ii := 0; ii < len(punteroBloques); ii++ {
 				var dbNew Db
-				fmt.Println("i " + strconv.Itoa(ii))
 				i.I_array_bloques[ii] = punteroBloques[ii]
 				copy(dbNew.Db_data[:], n[ii])
 				fmt.Println(string(dbNew.Db_data[:]))
@@ -528,7 +527,9 @@ func CrearGrupo(idp string, nombre string) {
 			EscribirTInodos(pPart, sb.Sb_ap_tabla_inodo, i)
 			punteroBloques = nil
 			fmt.Println(punteroBloques)
-			EscribirBitmap(pPart, sb.Sb_ap_bitmap_bloques+int64(nBit), int64(bloquesNuevos), '1')
+			EscribirBitmap(pPart, sb.Sb_first_free_bit_bit_bloques, int64(bloquesNuevos), '1')
+			sb.Sb_first_free_bit_bit_bloques++
+			EscribirSb(pPart, par.Part_start, sb)
 		}
 	} else {
 		fmt.Println("nombre 10+ caracteres")
@@ -772,7 +773,7 @@ func FormateoLWH(id string) {
 	sb.Sb_ap_bitmap_bloques = sb.Sb_ap_tabla_inodo + (sizeInodo * cantidadInodos)
 	sb.Sb_ap_bloques = sb.Sb_ap_bitmap_bloques + cantidadBloques
 	sb.Sb_ap_log = sb.Sb_ap_bloques + (sizeDb * cantidadBloques)
-	espacios := "               "
+	espacios := "                "
 	copy(sb.Sb_nombre_hd[:], espacios)
 	copy(sb.Sb_nombre_hd[:], nombreParticion)
 	sb.Sb_arbol_virtual_count = cantidadAvd
@@ -787,14 +788,14 @@ func FormateoLWH(id string) {
 	sb.Sb_size_struct_detalle_directorio = sizeDd
 	sb.Sb_size_struct_inodo = sizeInodo
 	sb.Sb_magic_num = 201603052
-	sb.Sb_inodos_free = cantidadInodos
-	sb.Sb_bloques_free = cantidadBloques
-	sb.Sb_arbol_virtual_free = cantidadAvd
-	sb.Sb_detalle_directorio_free = cantidadDD
-	sb.Sb_first_free_bit_arbol_directorio = sb.Sb_ap_bitmap_arbol_directorio
-	sb.Sb_first_free_bit_bit_bloques = sb.Sb_ap_bitmap_bloques
-	sb.Sb_first_free_bit_detalle_directorio = sb.Sb_ap_bitmap_detalle_directorio
-	sb.Sb_first_free_bit_tabla_inodo = sb.Sb_ap_bitmap_tabla_inodo
+	sb.Sb_inodos_free = cantidadInodos - 1
+	sb.Sb_bloques_free = cantidadBloques - 2
+	sb.Sb_arbol_virtual_free = cantidadAvd - 1
+	sb.Sb_detalle_directorio_free = cantidadDD - 1
+	sb.Sb_first_free_bit_arbol_directorio = 1
+	sb.Sb_first_free_bit_bit_bloques = 2
+	sb.Sb_first_free_bit_detalle_directorio = 1
+	sb.Sb_first_free_bit_tabla_inodo = 1
 
 	EscribirSb(pathArchivo, inicioPart, sb)
 	sb = LeerSb(pathArchivo, par.Part_start)
@@ -1514,16 +1515,31 @@ func CrearReportes(nombre string, pathN string, id string, ruta string) {
 		} else if strings.EqualFold(nombre, "disk") {
 			fmt.Println("SDISK")
 			pathArchivo := SearchPath(id)
-			ReporteParticiones(nombre, pathArchivo)
+			na := SearchNombre(id)
+			ReporteParticiones(nombre, pathArchivo, na)
 		} else if strings.EqualFold(nombre, "sb") {
 			fmt.Println("SSB")
+			pathArchivo := SearchPath(id)
+			ReporteSb(nombre, pathArchivo, id)
 		} else if strings.EqualFold(nombre, "bm_arbdir") {
+			n := SearchNombre(id)
+			p := SearchPath(id)
+			reporteBitMapArbolDirectorio(p, n)
 			fmt.Println("SBM-ARBDIR")
 		} else if strings.EqualFold(nombre, "bm_detdir") {
+			n := SearchNombre(id)
+			p := SearchPath(id)
+			reporteBitMapDetalleDirectorio(p, n)
 			fmt.Println("SBM-DETDIR")
 		} else if strings.EqualFold(nombre, "bm_inode") {
+			n := SearchNombre(id)
+			p := SearchPath(id)
+			reporteBitMapInodo(p, n)
 			fmt.Println("SBM-INODE")
 		} else if strings.EqualFold(nombre, "bm_block") {
+			n := SearchNombre(id)
+			p := SearchPath(id)
+			reporteBitMapBloques(p, n)
 			fmt.Println("SBM-BLOCK")
 		} else if strings.EqualFold(nombre, "bitacora") {
 			fmt.Println("BITACORA")
@@ -1537,12 +1553,6 @@ func CrearReportes(nombre string, pathN string, id string, ruta string) {
 			}
 			ReporteTreeFile(nombre, pathArchivo, id, ruta, nn)
 			fmt.Println("TREE-FILE")
-		} else if strings.EqualFold(nombre, "tree_directorio") {
-			fmt.Println("TREE-DIRECTORIO")
-		} else if strings.EqualFold(nombre, "tree_complete") {
-			fmt.Println("TREE-COMPLETE")
-		} else if strings.EqualFold(nombre, "ls") {
-			fmt.Println("SLS")
 		} else {
 			fmt.Println("Parametro incorrecto")
 		}
@@ -1561,7 +1571,7 @@ func ReporteMBR(nombre string, p string) {
 		panic(err)
 	}
 	var c int
-	reportMBR := "digraph rMBR {\n"
+	reportMBR := "digraph rMBR {\nlabel=ReporteMBR"
 	reportMBR += " abc[shape=none, margin=0,label=<\n<TABLE BORDER =\"0\" CELLBORDER =\"1\" CELLSPACING =\"0\" CELLPADDING=\"4\">\n"
 	reportMBR += "<TR><TD BGCOLOR=\"lightblue\">Nombre</TD>\n<TD BGCOLOR=\"lightblue\">Descripcion</TD></TR>\n"
 	reportMBR += "<TR><TD>mbr_tamaño</TD>" + "<TD>" + strconv.FormatInt(mbr.Mbr_tamano, 10) + "</TD></TR>\n"
@@ -1621,13 +1631,177 @@ func contadorNombre(particion Partition) int {
 	}
 	return cuenta
 }
-func ReporteSb() {
+func ReporteSb(nombre string, pathN string, id string) {
+	if strings.EqualFold(pathN, "") {
+		fmt.Println("Particion no montada ")
+		return
+	}
+	pp, fn := filepath.Split(path)
+	na := SearchNombre(id)
+	archivo, err := os.Create(pp + fn + ".dot")
+	defer archivo.Close()
+	if err != nil {
+		panic(err)
+	}
+	mbr = LeerMBR(pathN)
+	par := ObtenerParticion(na, mbr)
+	sb = LeerSb(pathN, par.Part_start)
+	reportSb := "digraph rSb {\nlabel=ReporteEbr\n"
+	reportSb += " abc[shape=none, margin=0,label=<\n<TABLE BORDER =\"0\" CELLBORDER =\"1\" CELLSPACING =\"0\" CELLPADDING=\"4\">\n"
+	reportSb += "<TR><TD BGCOLOR=\"lightblue\">Nombre</TD>\n<TD BGCOLOR=\"lightblue\">Descripcion</TD></TR>\n"
+	reportSb += "<TR><TD>Sb_nombre_hd</TD>" + "<TD>" + string(sb.Sb_nombre_hd[:]) + "</TD></TR>\n"
+	reportSb += "<TR><TD>Sb_arbol_virtual_count</TD>" + "<TD>" + strconv.FormatInt(sb.Sb_arbol_virtual_count, 10) + "</TD></TR>\n"
+	reportSb += "<TR><TD>Sb_detalle_directorio_count</TD>" + "<TD>" + strconv.FormatInt(sb.Sb_detalle_directo_count, 10) + "</TD></TR>\n"
+	reportSb += "<TR><TD>Sb_inodos_count</TD>" + "<TD>" + strconv.FormatInt(sb.Sb_detalle_directo_count, 10) + "</TD></TR>\n"
+	reportSb += "<TR><TD>Sb_bloques_count</TD>" + "<TD>" + strconv.FormatInt(sb.Sb_bloques_count, 10) + "</TD></TR>\n"
+	reportSb += "<TR><TD>Sb_arbol_virtual_free</TD>" + "<TD>" + strconv.FormatInt(sb.Sb_arbol_virtual_free, 10) + "</TD></TR>\n"
+	reportSb += "<TR><TD>Sb_detalle_directorio_free</TD>" + "<TD>" + strconv.FormatInt(sb.Sb_detalle_directorio_free, 10) + "</TD></TR>\n"
+	reportSb += "<TR><TD>Sb_inodos_free</TD>" + "<TD>" + strconv.FormatInt(sb.Sb_inodos_free, 10) + "</TD></TR>\n"
+	reportSb += "<TR><TD>Sb_bloques_free</TD>" + "<TD>" + strconv.FormatInt(sb.Sb_bloques_free, 10) + "</TD></TR>\n"
+	reportSb += "<TR><TD>Sb_date_creacion</TD>" + "<TD>" + string(sb.Sb_date_creacion[:]) + "</TD></TR>\n"
+	reportSb += "<TR><TD>Sb_date_ultimo_montaje</TD>" + "<TD>" + string(sb.Sb_date_ultimo_montaje[:]) + "</TD></TR>\n"
+	reportSb += "<TR><TD>Sb_montajes_count</TD>" + "<TD>" + strconv.FormatInt(sb.Sb_montajes_count, 10) + "</TD></TR>\n"
+	reportSb += "<TR><TD>Sb_ap_bitmap_arbol_directorio</TD>" + "<TD>" + strconv.FormatInt(sb.Sb_ap_bitmap_arbol_directorio, 10) + "</TD></TR>\n"
+	reportSb += "<TR><TD>Sb_ap_arbol_directorio</TD>" + "<TD>" + strconv.FormatInt(sb.Sb_ap_arbol_directorio, 10) + "</TD></TR>\n"
+	reportSb += "<TR><TD>Sb_ap_bitmap_detalle_directorio</TD>" + "<TD>" + strconv.FormatInt(sb.Sb_ap_bitmap_detalle_directorio, 10) + "</TD></TR>\n"
+	reportSb += "<TR><TD>Sb_ap_detalle_directorio</TD>" + "<TD>" + strconv.FormatInt(sb.Sb_ap_detalle_directorio, 10) + "</TD></TR>\n"
+	reportSb += "<TR><TD>Sb_ap_bitmap_tabla_inodo</TD>" + "<TD>" + strconv.FormatInt(sb.Sb_ap_bitmap_tabla_inodo, 10) + "</TD></TR>\n"
+	reportSb += "<TR><TD>Sb_ap_tabla_inodo</TD>" + "<TD>" + strconv.FormatInt(sb.Sb_ap_tabla_inodo, 10) + "</TD></TR>\n"
+	reportSb += "<TR><TD>Sb_ap_bitmap_bloques</TD>" + "<TD>" + strconv.FormatInt(sb.Sb_ap_bitmap_bloques, 10) + "</TD></TR>\n"
+	reportSb += "<TR><TD>Sb_ap_bloques</TD>" + "<TD>" + strconv.FormatInt(sb.Sb_ap_bloques, 10) + "</TD></TR>\n"
+	reportSb += "<TR><TD>Sb_ap_log</TD>" + "<TD>" + strconv.FormatInt(sb.Sb_ap_log, 10) + "</TD></TR>\n"
+	reportSb += "<TR><TD>Sb_size_struct_arbol_directorio</TD>" + "<TD>" + strconv.FormatInt(sb.Sb_size_struct_arbol_directorio, 10) + "</TD></TR>\n"
+	reportSb += "<TR><TD>Sb_size_struct_detalle_directorio</TD>" + "<TD>" + strconv.FormatInt(sb.Sb_size_struct_detalle_directorio, 10) + "</TD></TR>\n"
+	reportSb += "<TR><TD>Sb_size_struct_inodo</TD>" + "<TD>" + strconv.FormatInt(sb.Sb_size_struct_inodo, 10) + "</TD></TR>\n"
+	reportSb += "<TR><TD>Sb_size_struct_bloque</TD>" + "<TD>" + strconv.FormatInt(sb.Sb_size_struct_bloque, 10) + "</TD></TR>\n"
+	reportSb += "<TR><TD>Sb_first_free_bit_arbol_directorio</TD>" + "<TD>" + strconv.FormatInt(sb.Sb_first_free_bit_arbol_directorio, 10) + "</TD></TR>\n"
+	reportSb += "<TR><TD>Sb_first_free_bit_detalle_directorio</TD>" + "<TD>" + strconv.FormatInt(sb.Sb_first_free_bit_detalle_directorio, 10) + "</TD></TR>\n"
+	reportSb += "<TR><TD>Sb_first_free_bit_tabla_inodo</TD>" + "<TD>" + strconv.FormatInt(sb.Sb_first_free_bit_tabla_inodo, 10) + "</TD></TR>\n"
+	reportSb += "<TR><TD>Sb_first_free_bit_bloques</TD>" + "<TD>" + strconv.FormatInt(sb.Sb_first_free_bit_bit_bloques, 10) + "</TD></TR>\n"
+	reportSb += "<TR><TD>Sb_magic_num</TD>" + "<TD>" + strconv.FormatInt(sb.Sb_magic_num, 10) + "</TD></TR>\n"
+	reportSb += "</TABLE>>];\n}"
+	archivo.WriteString(reportSb)
+	archivo.Sync()
+	archivo.Close()
 
+	tr := exec.Command("dot", "-Tjpg", pp+fn+".dot", "-o", pp+fn+".jpg")
+	out, m := tr.CombinedOutput()
+	if m != nil {
+		fmt.Println(fmt.Sprint(m) + ": " + string(out))
+	}
+}
+func reporteBitMapArbolDirectorio(pathN string, nombre string) {
+	if strings.EqualFold(pathN, "") {
+		fmt.Println("Particion no montada ")
+		return
+	}
+	pp, fn := filepath.Split(path)
+	archivo, err := os.Create(pp + fn + ".txt")
+	defer archivo.Close()
+	if err != nil {
+		panic(err)
+	}
+	mbr = LeerMBR(pathN)
+	par := ObtenerParticion(nombre, mbr)
+	sb = LeerSb(pathN, par.Part_start)
+	bitmapAVD := LeerBitmap(pathN, sb.Sb_ap_bitmap_arbol_directorio, sb.Sb_arbol_virtual_count)
+	var cadena string
+	for i := 0; i < len(bitmapAVD); i++ {
+		if i == 0 {
+		} else if i%20 == 0 {
+			cadena += "\n"
+		}
+		cadena += string(bitmapAVD[i]) + "|"
+	}
+	archivo.WriteString(cadena)
+	archivo.Sync()
+	archivo.Close()
+}
+func reporteBitMapDetalleDirectorio(pathN string, nombre string) {
+	if strings.EqualFold(pathN, "") {
+		fmt.Println("Particion no montada ")
+		return
+	}
+	pp, fn := filepath.Split(path)
+	archivo, err := os.Create(pp + fn + ".txt")
+	defer archivo.Close()
+	if err != nil {
+		panic(err)
+	}
+	mbr = LeerMBR(pathN)
+	par := ObtenerParticion(nombre, mbr)
+	sb = LeerSb(pathN, par.Part_start)
+	bitmapDD := LeerBitmap(pathN, sb.Sb_ap_bitmap_detalle_directorio, sb.Sb_detalle_directo_count)
+	var cadena string
+	for i := 0; i < len(bitmapDD); i++ {
+		if i == 0 {
+		} else if i%20 == 0 {
+			cadena += "\n"
+		}
+		cadena += string(bitmapDD[i]) + "|"
+	}
+	archivo.WriteString(cadena)
+	archivo.Sync()
+	archivo.Close()
+}
+func reporteBitMapInodo(pathN string, nombre string) {
+	if strings.EqualFold(pathN, "") {
+		fmt.Println("Particion no montada ")
+		return
+	}
+	pp, fn := filepath.Split(path)
+	archivo, err := os.Create(pp + fn + ".txt")
+	defer archivo.Close()
+	if err != nil {
+		panic(err)
+	}
+	mbr = LeerMBR(pathN)
+	par := ObtenerParticion(nombre, mbr)
+	sb = LeerSb(pathN, par.Part_start)
+	bitmapInodo := LeerBitmap(pathN, sb.Sb_ap_bitmap_tabla_inodo, sb.Sb_inodos_count)
+	var cadena string
+	for i := 0; i < len(bitmapInodo); i++ {
+		if i == 0 {
+		} else if i%20 == 0 {
+			cadena += "\n"
+		}
+		cadena += string(bitmapInodo[i]) + "|"
+	}
+	archivo.WriteString(cadena)
+	archivo.Sync()
+	archivo.Close()
+}
+func reporteBitMapBloques(pathN string, nombre string) {
+	if strings.EqualFold(pathN, "") {
+		fmt.Println("Particion no montada ")
+		return
+	}
+	pp, fn := filepath.Split(path)
+	archivo, err := os.Create(pp + fn + ".txt")
+	defer archivo.Close()
+	if err != nil {
+		panic(err)
+	}
+	mbr = LeerMBR(pathN)
+	par := ObtenerParticion(nombre, mbr)
+	sb = LeerSb(pathN, par.Part_start)
+	bitmapBloques := LeerBitmap(pathN, sb.Sb_ap_bitmap_bloques, sb.Sb_inodos_count)
+	var cadena string
+	for i := 0; i < len(bitmapBloques); i++ {
+		if i == 0 {
+		} else if i%20 == 0 {
+			cadena += "\n"
+		}
+		cadena += string(bitmapBloques[i]) + "|"
+	}
+	archivo.WriteString(cadena)
+	archivo.Sync()
+	archivo.Close()
 }
 
 var Extendida bool = false
 
-func ReporteParticiones(nombre string, pathN string) {
+func ReporteParticiones(nombre string, pathN string, na string) {
 	if strings.EqualFold(pathN, "") {
 		fmt.Println("Particion no montada ")
 		return
@@ -1642,7 +1816,7 @@ func ReporteParticiones(nombre string, pathN string) {
 	var colSpan int = 0
 	var particionActual Partition
 	var nombrePart string = "LIBRE"
-	reporteParticiones := "digraph rParticiones {\n"
+	reporteParticiones := "digraph rParticiones {\nlabel=" + na + "\n"
 	reporteParticiones += "abd[shape=none, margin =0, label=<\n"
 	reporteParticiones += "<TABLE BORDER=\"1\" CELLBORDER =\"1\" CELLSPACING = \"3\" CELLPADDING=\"4\">\n"
 	reporteParticiones += "<TR><TD ROWSPAN=\"3\">MBR</TD>\n"
