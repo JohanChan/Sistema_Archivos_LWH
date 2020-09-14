@@ -1,12 +1,13 @@
 package main
 
 import (
-	"proyecto/menu"
+	"SistemaArchivos/inicio"
 )
 
 func main() {
-	menu.Menu()
+	inicio.Menu()
 
 }
 
-//exec -path->/home/johan/Escritorio/ArchivosPrueba/hola.mia
+//exec -path->/home/johan/Escritorio/ArchivosPearrueba/hola.mia
+//exec -path->/home/johan/Descargas/Entrada1.mia

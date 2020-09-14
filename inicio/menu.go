@@ -1,12 +1,11 @@
-package menu
+package inicio
 
 import (
+	"SistemaArchivos/funciones"
 	"bufio"
 	"fmt"
 	"io/ioutil"
 	"os"
-	"proyecto/analizador"
-
 	"strings"
 )
 
@@ -14,24 +13,21 @@ var arrayLinea []string
 var cadenaArchivo string
 
 func Menu() {
-	fmt.Println("Ingrese comando")
+	fmt.Print(">> ")
 	bf := bufio.NewReader(os.Stdin)
 	entrada, _ := bf.ReadString('\n')
 	cadena := strings.TrimRight(entrada, "\r\n")
 
 	SplitSaltos(cadena)
+	arrayLinea = ValidaPath(arrayLinea)
 
 	//arrayLinea = ValidaPath(arrayLinea)
 	Exec(arrayLinea)
-	analizador.Imprimir(arrayLinea)
-	fmt.Println("Desea ingresar otro comando?, s/n")
-	bf = bufio.NewReader(os.Stdin)
-	entrada, _ = bf.ReadString('\n')
-	chain := strings.TrimRight(entrada, "\r\n")
-	if strings.EqualFold(chain, "s") {
-		Menu()
-	} else if strings.EqualFold(chain, "n") {
+	//analizador.Imprimir(arrayLinea)
+	if strings.EqualFold(cadena, "exit") {
 		fmt.Println("Un gusto, vuelva pronto")
+	} else {
+		Menu()
 	}
 }
 func SplitSaltos(cadena string) {
@@ -82,8 +78,8 @@ func LimpiarArreglo() {
 }
 func EjecutarArchivo() {
 	arrayLinea = append(arrayLinea, " ")
-	analizador.AsignarArray(arrayLinea)
-	analizador.FuncionComando(arrayLinea)
+	funciones.AsignarArray(arrayLinea)
+	funciones.FuncionComando(arrayLinea)
 	LimpiarArreglo()
 }
 func ValidaPath(arreglo []string) []string {
